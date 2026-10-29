@@ -14,6 +14,7 @@ data "aws_ecr_repository" "app" {
 
 locals {
   name               = "${var.env}-${var.app_name}"
+  app_domain         = "${var.app_subdomain}.${var.domain_name}"
   vpc_id             = data.terraform_remote_state.vpc.outputs.vpc_id
   public_subnet_ids  = data.terraform_remote_state.vpc.outputs.public_subnet_ids
   private_subnet_ids = data.terraform_remote_state.vpc.outputs.private_subnet_ids

@@ -2,6 +2,9 @@ app_name            = "track-tool"
 ecr_repository_name = "track-tool-req"
 image_tag           = "v0.1.0-70addf6"
 
+domain_name   = "embate.dev"
+app_subdomain = "tracktool"
+
 container_port = 3000
 cpu            = 256
 memory         = 512

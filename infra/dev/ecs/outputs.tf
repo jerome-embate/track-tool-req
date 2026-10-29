@@ -1,6 +1,11 @@
 output "app_url" {
-  value       = "http://${aws_lb.app.dns_name}"
-  description = "Public URL of the app through the ALB."
+  value       = "https://${local.app_domain}"
+  description = "Public URL of the app."
+}
+
+output "alb_dns_name" {
+  value       = aws_lb.app.dns_name
+  description = "ALB DNS name, which the app domain aliases to."
 }
 
 output "cluster_name" {

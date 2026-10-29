@@ -26,6 +26,16 @@ variable "image_tag" {
   description = "Image tag to deploy from the ECR repository."
 }
 
+variable "domain_name" {
+  type        = string
+  description = "Route 53 hosted zone and ACM certificate domain, e.g. example.com."
+}
+
+variable "app_subdomain" {
+  type        = string
+  description = "Subdomain the app is served on, e.g. app for app.example.com."
+}
+
 variable "container_port" {
   type        = number
   default     = 3000

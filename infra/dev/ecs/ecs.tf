@@ -99,7 +99,7 @@ resource "aws_ecs_service" "app" {
   }
 
   depends_on = [
-    aws_lb_listener.http,
+    aws_lb_listener.https,
     aws_ecs_cluster_capacity_providers.this,
   ]
 
