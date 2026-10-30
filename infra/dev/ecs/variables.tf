@@ -23,7 +23,7 @@ variable "ecr_repository_name" {
 
 variable "image_tag" {
   type        = string
-  description = "Image tag to deploy from the ECR repository."
+  description = "Image tag for the initial task definition. Later releases are deployed by GitHub Actions."
 }
 
 variable "domain_name" {

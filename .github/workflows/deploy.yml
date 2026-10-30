@@ -1,0 +1,111 @@
+name: Build and Deploy to ECS
+
+on:
+  push:
+    branches:
+    - main
+    paths-ignore:
+    - 'infra/**'
+    - '**.md'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to increment
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+        default: patch
+
+# One release at a time, so two pushes can't compute the same version.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  ECS_CLUSTER: dev-track-tool
+  ECS_SERVICE: dev-track-tool
+  ECS_TASK_FAMILY: dev-track-tool
+  CONTAINER_NAME: track-tool
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        audience: sts.amazonaws.com
+        aws-region: ${{ secrets.AWS_REGION }}
+        role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Compute next version
+      id: release
+      run: bash ./scripts/git_update.sh -v "${{ inputs.bump || 'patch' }}"
+
+    - name: Build and push image to Amazon ECR
+      id: build
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ github.event.repository.name }}
+        IMAGE_TAG: ${{ steps.release.outputs.new-tag }}
+      run: |
+        IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+        # Tags are immutable in ECR; on a re-run the image may already be there.
+        if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+          echo "Image $IMAGE already exists, skipping build"
+          exit 0
+        fi
+
+        # --provenance/--sbom off: ECS can't pull images that are pushed with attestations.
+        docker build --platform linux/amd64 --provenance=false --sbom=false -t "$IMAGE" .
+        docker push "$IMAGE"
+
+    - name: Push version tag
+      env:
+        IMAGE_TAG: ${{ steps.release.outputs.new-tag }}
+      run: |
+        if git ls-remote --exit-code --tags origin "refs/tags/$IMAGE_TAG" >/dev/null; then
+          echo "Tag $IMAGE_TAG already on origin"
+        else
+          git push origin "$IMAGE_TAG"
+        fi
+
+    - name: Download current task definition
+      run: |
+        aws ecs describe-task-definition \
+          --task-definition "$ECS_TASK_FAMILY" \
+          --query taskDefinition > task-definition.json
+
+    - name: Set new image in task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition.json
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ steps.build.outputs.image }}
+
+    - name: Deploy to Amazon ECS
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        service: ${{ env.ECS_SERVICE }}
+        wait-for-service-stability: true

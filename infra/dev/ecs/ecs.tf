@@ -98,6 +98,12 @@ resource "aws_ecs_service" "app" {
     rollback = true
   }
 
+  # GitHub Actions deploys new task definition revisions with each image release.
+  # Terraform keeps managing the base task definition but doesn't roll the service back.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   depends_on = [
     aws_lb_listener.https,
     aws_ecs_cluster_capacity_providers.this,

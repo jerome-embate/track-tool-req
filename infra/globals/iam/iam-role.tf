@@ -23,12 +23,33 @@ module "iam_policy" {
           "ecr:BatchGetImage",
           "ecr:BatchCheckLayerAvailability",
           "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
           "ecr:GetDownloadUrlForLayer",
           "ecr:InitiateLayerUpload",
           "ecr:PutImage",
           "ecr:UploadLayerPart"
         ]
         Resource = local.ecr_repos
+      },
+      {
+        # Task definition actions don't support resource-level permissions.
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"]
+        Resource = ["*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeServices", "ecs:UpdateService"]
+        Resource = ["arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/*"]
+      },
+      {
+        # Registering a task definition passes its execution role to ECS.
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*-task-execution"]
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
       },
     ]
   })
